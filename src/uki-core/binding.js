@@ -10,11 +10,8 @@ var Binding = fun.newClass({
     modelEvent: '',
     viewEvent: 'blur',
 
-    init: function(view, model, options) {
+    init: function(options) {
         utils.extend(this, options);
-
-        this.view = view;
-        this.model = model;
         if (!this.modelEvent) {
             this.modelEvent = 'change.' + this.modelProp;
         }
@@ -61,4 +58,4 @@ var Binding = fun.newClass({
 });
 
 
-exports.Binding = Binding;
+exports.Binding  = Binding;

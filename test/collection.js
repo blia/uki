@@ -1,15 +1,13 @@
 var builder = require('../src/uki-core/builder'),
     selector = require('../src/uki-core/selector');
     
-builder.namespaces.unshift({
+var b = new builder.Builder([{
     Base: require('../src/uki-core/view/base.js').Base,
     Container: require('../src/uki-core/view/Container.js').Container
-});
-
+}]);
+    
 module.exports = {
-    build: builder.build,
+    builder: b,
     find: selector.find,
-    namespaces: builder.namespaces,
-    utils: require('../src/uki-core/utils'),
-    view: require('../src/uki-core/view')
+    Collection: require('../src/uki-core/collection').Collection
 };
