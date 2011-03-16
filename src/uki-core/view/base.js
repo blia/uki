@@ -20,6 +20,14 @@ var POS_RULES = [
         mt: 'marginTop', mb: 'marginBottom'
     };
 
+function styleToString(style) {
+    if (typeof style === 'string') return style;
+    var result = [];
+    utils.forEach(style, function(value, key) {
+        result.push(utils.dasherize(key) + ':' + value);
+    });
+    return result.join(';');
+}
 
 var Base = view.newClass('Base', {
 
@@ -140,25 +148,27 @@ var Base = view.newClass('Base', {
 
     scrollLeft: fun.newDelegateProp('dom', 'scrollLeft'),
 
-    title: fun.newDelegateProp('dom', 'title'),
-    
-    style: function(value) {
-        var style = this.dom().style;
-        
-        if (value === undefined) return style;
-        if (typeof value === 'string') {
-            style.cssText += ';' + value;
-        } else {
-            utils.forEach(value, function(v, k) {
-                style[k] = v;
-            });
-        }
-        return this;
-    },
-
     scroll: function(dx, dy) {
         dx && this.scrollLeft(this.scrollLeft() + dx);
         dy && this.scrollTop(this.scrollTop() + dy);
+    },
+
+    title: fun.newDelegateProp('dom', 'title'),
+    
+    /**
+    * Experimental
+    */
+    style: function(value) {
+        if (value === undefined) {
+            return this.dom().style;
+        }
+        this.dom().style.cssText = styleToString(value);
+        return this;
+    },
+    
+    addStyle: function(value) {
+        this.dom().style.cssText += ';' + styleToString(value);
+        return this;
     },
 
 
@@ -166,6 +176,17 @@ var Base = view.newClass('Base', {
 
     domForEvent: function(type) {
         return this.dom();
+    },
+
+    /**
+    * Experimental.
+    */
+    controller: function(value) {
+        if (value === undefined) {
+            return this._controller || this.parent() && this.parent().controller();
+        }
+        this._controller = value;
+        return this;
     },
 
     /**
@@ -178,7 +199,10 @@ var Base = view.newClass('Base', {
                 this.addListener(name, callback);
             }, this);
         } else {
-            var wrapper = fun.bindOnce(callback, this);
+            var wrapper = typeof callback === 'string' ?
+                Base.controllerCallback(callback) :
+                fun.bindOnce(callback, this);
+
             this._eventNames || (this._eventNames = {});
             utils.forEach(names.split(' '), function(name) {
                 this._eventNames[name] = true;
@@ -194,7 +218,11 @@ var Base = view.newClass('Base', {
      * @param {function()} callback or null to remove all callbacks
      */
     removeListener: function(names, callback) {
-        var wrapper = callback && fun.bindOnce(callback, this);
+        var wrapper = callback && (
+            typeof callback === 'string' ?
+                Base.controllerCallback(callback) :
+                fun.bindOnce(callback, this)
+            );
         names || (names = utils.keys(this._eventNames || {}).join(' '));
         utils.forEach(names.split(' '), function(name) {
             evt.removeListener(this.domForEvent(name), name, wrapper);
@@ -204,8 +232,8 @@ var Base = view.newClass('Base', {
 
     trigger: function(e) {
         var node = this.domForEvent(e.type);
-        var wrapped = evt.createEvent(e, { target: node });
-        return evt.trigger.call(node, e);
+        var wrapped = evt.createEvent(e, { _targetView: this });
+        return evt.trigger(node, e);
     },
 
 
@@ -261,7 +289,7 @@ var Base = view.newClass('Base', {
             return this._styleToPos(this.dom().style);
         }
         pos = this._expandPos(pos);
-        this._applyPosToStyle(pos, this.dom().style);
+        this.addStyle(pos);
         return this;
     },
 
@@ -287,30 +315,24 @@ var Base = view.newClass('Base', {
         utils.forEach(POS_MAP, function(longRule, shortRule) {
             if (pos[shortRule]) pos[longRule] = pos[shortRule];
         });
+        pos.position = 'absolute';
         return pos;
-    },
-
-    _applyPosToStyle: function(pos, style) {
-        style.position = 'absolute';
-        utils.forEach(POS_RULES, function(rule) {
-            style[rule] = pos[rule] || '';
-        });
     },
 
     clientRect: function(ignoreScroll) {
         return dom.clientRect(this.dom(), ignoreScroll);
     },
-    
+
     /* -------------------------------- Binding -----------------------------*/
-    
+
     bindingOptions: fun.newProp('bindingOptions'),
-    
+
     bindings: fun.newProp('bindings', function(val) {
         val = val || [];
         utils.invoke(this.bindings() || [], 'destruct');
         this._bindings = utils.map(val, this._createBinding, this);
     }),
-    
+
     _createBinding: function(options) {
         options = utils.extend(this.bindingOptions(), options);
         options.view = this;
@@ -321,12 +343,24 @@ var Base = view.newClass('Base', {
         if (val === 'undefined') {
             return this.bindings()[0];
         }
-        return this.bindings([val]);
+        return this.bindings(val && [val]);
     }
-    
+
 });
 
 Base.prototype.on = Base.prototype.addListener;
+
+var callbacks = {};
+Base.controllerCallback = function(name) {
+    if (!callbacks[name]) {
+        callbacks[name] = function() {
+            var c = this.controller();
+            if (c && c[name]) {
+                c[name].apply(c, arguments);
+            }
+        };
+    }
+};
 
 
 exports.Base = Base;
